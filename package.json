@@ -2,7 +2,7 @@
   "name": "rxflow-backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/server.js",
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -13,7 +13,6 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.1",
     "multer": "^2.0.2",
-    "nodemailer": "^7.0.12",
     "resend": "^6.7.0"
   },
   "devDependencies": {
