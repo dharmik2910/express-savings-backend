@@ -61,13 +61,18 @@ exports.sendRxMail = async (req, res) => {
  */
 exports.sendContactMail = async (req, res) => {
   try {
-    const { firstName, lastName, email, inquiryType, message } = escapeDeep(req.body);
+    const { firstName, lastName, email, phone, inquiryType, message } = escapeDeep(req.body);
+
+    if (!firstName || !lastName || !message) {
+      return res.status(400).json({ message: "Name and message are required" });
+    }
 
     const mailContent = `
       <h2>New Contact Form Submission</h2>
       <p><strong>Name:</strong> ${firstName} ${lastName}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Inquiry Type:</strong> ${inquiryType}</p>
+      <p><strong>Email:</strong> ${email || "N/A"}</p>
+      <p><strong>Phone:</strong> ${phone || "N/A"}</p>
+      ${inquiryType ? `<p><strong>Inquiry Type:</strong> ${inquiryType}</p>` : ""}
       <p><strong>Message:</strong></p>
       <p>${message}</p>
     `;
