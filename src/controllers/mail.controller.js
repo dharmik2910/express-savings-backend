@@ -55,7 +55,6 @@ exports.sendRxMail = async (req, res) => {
       <ul>
         ${rxNumbers.map((rx) => `<li>${rx}</li>`).join("")}
       </ul>
-      <p>Status: <strong>Prescription mail sent</strong></p>
     `;
 
     await sendMail({
