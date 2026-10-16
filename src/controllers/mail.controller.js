@@ -20,6 +20,23 @@ const escapeDeep = (value) => {
   return value;
 };
 
+// Date inputs send YYYY-MM-DD; show US format MM/DD/YYYY
+const formatDate = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  return match ? `${match[2]}/${match[3]}/${match[1]}` : value;
+};
+
+// Show 10-digit US numbers as (856) 566-1100; leave anything else as typed
+const formatPhone = (value) => {
+  const digits = String(value || "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  return digits.length === 10
+    ? `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+    : value;
+};
+
+// Email subjects are plain text, so use the raw value (no HTML escaping) on one line
+const subjectText = (value) => String(value || "").replace(/[\r\n]+/g, " ").trim();
+
 /**
  * RX SUBMISSION API
  * Accepts only multiple RX numbers
@@ -71,7 +88,7 @@ exports.sendContactMail = async (req, res) => {
       <h2>New Contact Form Submission</h2>
       <p><strong>Name:</strong> ${firstName} ${lastName}</p>
       <p><strong>Email:</strong> ${email || "N/A"}</p>
-      <p><strong>Phone:</strong> ${phone || "N/A"}</p>
+      <p><strong>Phone:</strong> ${phone ? formatPhone(phone) : "N/A"}</p>
       ${inquiryType ? `<p><strong>Inquiry Type:</strong> ${inquiryType}</p>` : ""}
       <p><strong>Message:</strong></p>
       <p>${message}</p>
@@ -144,6 +161,13 @@ exports.sendTransferMail = async (req, res) => {
       }
     }
 
+    // The website sends a single { name: "ALL", rxnumber: "ALL" } entry for "transfer all"
+    const transferAll =
+      Array.isArray(prescriptions) &&
+      prescriptions.length === 1 &&
+      prescriptions[0].name === "ALL" &&
+      prescriptions[0].rxnumber === "ALL";
+
     /* -------------------- 5. Generate Email HTML -------------------- */
     const html = `
       <h2>Prescription Transfer Request</h2>
@@ -151,8 +175,8 @@ exports.sendTransferMail = async (req, res) => {
       <h3>Patient Details</h3>
       <p>
         <strong>Name:</strong> ${firstName} ${lastName}<br/>
-        <strong>Phone:</strong> ${phone}<br/>
-        <strong>Date of Birth:</strong> ${dob}
+        <strong>Phone:</strong> ${formatPhone(phone)}<br/>
+        <strong>Date of Birth:</strong> ${formatDate(dob)}
       </p>
 
       <h3>Previous Pharmacy Info</h3>
@@ -161,7 +185,10 @@ exports.sendTransferMail = async (req, res) => {
         <strong>Pharmacy Address:</strong> ${address}
       </p>
 
-      ${prescriptions && prescriptions.length > 0 ? `
+      ${transferAll ? `
+        <h3>Prescriptions</h3>
+        <p><strong>Transfer ALL medications</strong> on file at the previous pharmacy.</p>
+      ` : prescriptions && prescriptions.length > 0 ? `
         <h3>Prescriptions</h3>
         <ul>
           ${prescriptions
@@ -216,15 +243,15 @@ exports.sendMedicationAvailabilityMail = async (req, res) => {
         <hr/>
         <h3>Patient Information</h3>
         <p><strong>Name:</strong> ${firstName} ${lastName}</p>
-        <p><strong>DOB:</strong> ${dob || "N/A"}</p>
-        <p><strong>Phone:</strong> ${phone}</p>
+        <p><strong>DOB:</strong> ${dob ? formatDate(dob) : "N/A"}</p>
+        <p><strong>Phone:</strong> ${formatPhone(phone)}</p>
         <p><strong>Email:</strong> ${email || "N/A"}</p>
         <p><strong>Consent Provided:</strong> ${consent ? "Yes" : "No"}</p>
       </div>
     `;
 
     await sendMail({
-      subject: `Availability Inquiry: ${medicationName}`,
+      subject: `Availability Inquiry: ${subjectText(req.body.medicationName)}`,
       html,
     });
 
@@ -255,6 +282,10 @@ exports.sendSavingsRequestMail = async (req, res) => {
       consent,
     } = escapeDeep(req.body);
 
+    if (!firstName || !lastName || !dob || !phone || !medicationName || !insuranceStatus || !expensiveElsewhere) {
+      return res.status(400).json({ message: "Required fields missing" });
+    }
+
     // Build Email HTML
     const html = `
       <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
@@ -263,8 +294,8 @@ exports.sendSavingsRequestMail = async (req, res) => {
         <hr />
         <h3>Patient Info</h3>
         <p><strong>Name:</strong> ${firstName} ${lastName}<br/>
-           <strong>DOB:</strong> ${dob}<br/>
-           <strong>Phone:</strong> ${phone}</p>
+           <strong>DOB:</strong> ${formatDate(dob)}<br/>
+           <strong>Phone:</strong> ${formatPhone(phone)}</p>
         
         <h3>Insurance & Cost</h3>
         <p><strong>Status:</strong> ${insuranceStatus}<br/>
@@ -273,12 +304,13 @@ exports.sendSavingsRequestMail = async (req, res) => {
         <h3>Optional Info</h3>
         <p><strong>Current Pharmacy:</strong> ${currentPharmacy || "N/A"}<br/>
            <strong>Price Paid/Quoted:</strong> ${approximatePrice || "N/A"}</p>
+        <p><strong>Insurance Card:</strong> ${req.file ? `Attached (${escapeHtml(req.file.originalname)})` : "Not uploaded"}</p>
         <p><strong>Consent Given:</strong> ${consent ? "Yes" : "No"}</p>
       </div>
     `;
 
     const mailOptions = {
-      subject: `Savings Request: ${medicationName} - ${firstName} ${lastName}`,
+      subject: `Savings Request: ${subjectText(req.body.medicationName)} - ${subjectText(req.body.firstName)} ${subjectText(req.body.lastName)}`,
       html,
       attachments: [],
     };
